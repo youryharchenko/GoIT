@@ -1,0 +1,29 @@
+[project]
+name = "gomoku"
+version = "0.1.0"
+description = "Gomoku Game in Python"
+authors = [
+    {name = "youry07",email = "youry@ukr.net"}
+]
+readme = "README.md"
+requires-python = ">=3.12, <3.14"
+dependencies = [
+    "pyside6 (>=6.9.0,<7.0.0)"
+]
+
+[project.scripts]
+gomoku-side6 = "gomoku.side6:main"
+
+[tool.poetry]
+packages = [{include = "gomoku", from = "src"}]
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+black = "^25.1.0"
+flake8 = "^7.2.0"
+mypy = "^1.15.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

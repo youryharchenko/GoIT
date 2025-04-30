@@ -1,0 +1,10 @@
+{
+    "python.formatting.provider": "black",
+    "python.linting.enabled": true,
+    "python.linting.flake8Enabled": true,
+    // або "python.linting.pylintEnabled": true,
+    // або "python.linting.ruffEnabled": true,
+    "python.analysis.typeCheckingMode": "strict" //"basic" // або "strict"
+    // Можливо, знадобиться вказати шлях до mypy, якщо він не знаходиться автоматично
+    // "python.analysis.diagnosticSeverityOverrides": { "reportOptionalMemberAccess": "none" } // Приклад налаштування для Pylance
+}
