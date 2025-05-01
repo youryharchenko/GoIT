@@ -1,5 +1,27 @@
 from __future__ import annotations
-from typing import List
+import logging
+import sys
+import random
+from typing import List, Tuple
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# Щоб повідомлення виводилися на консоль, потрібно додати обробник (handler)
+# Перевіряємо, чи вже є обробники, щоб уникнути дублювання виводу при повторному імпорті модуля
+if not logger.handlers:
+    # Створюємо обробник для виводу на стандартний потік помилок (консоль)
+    handler = logging.StreamHandler(sys.stderr)
+
+    # (Опціонально) Встановлюємо рівень для обробника (зазвичай такий самий, як у логера, або нижчий)
+    #handler.setLevel(logging.DEBUG)
+
+    # (Опціонально) Встановлюємо формат виводу повідомлень
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+
+    # Додаємо обробник до логера
+    logger.addHandler(handler)
 
 class Point:
     def __init__(self, net: Net, x: int, y: int):
@@ -28,8 +50,8 @@ class Point:
         self.slots.append(s)
         self.r[s.s] += 1
 
-    def to_string(self):
-        return "x:{0},y:{1};".format(self.x, self.y)
+    def __repr__(self):
+        return f"Point({self.x},{self.y})"
 
 class Slot:
     def __init__(self, net: Net, scp: Point, d: int):
@@ -69,14 +91,22 @@ class Slot:
             self.points[i].add_slot(self)
 
 class Net:
-    def __init__(self):
-        pass
+    def __init__(self, n: int):
+        logger.debug("Net.__init__ started")
+        self.n = n
+        logger.debug("Net.__init__ finished")
 
     def init(self):
+
+        logger.debug("Net.init started")
+
         self.all_slots: List[Slot] = []
         self.active_slots: List[List[Slot]] = [[], [], []]  # free, black, white
 
-        self.all_points = [Point(self, int(i / 15), i % 15 ) for i in range(0, 225)]
+        self.all_points = [Point(self, int(i / self.n), i % self.n) for i in range(0, self.n*self.n)]
+
+        #logger.debug(f"Net.init all_points: {self.all_points}")
+        
         self.empty_points = self.all_points[:]
 
         for p in self.all_points:
@@ -89,7 +119,12 @@ class Net:
         for s in self.all_slots:
             s.init()
 
+        logger.debug("Net.init finished")
+
     def step(self, x: int, y: int, c: int):
+
+        logger.debug(f"Net.step({x}, {y}, {c}) started")
+
         p = self.get_point(x, y)
         p.s = c
         self.empty_points.remove(p)
@@ -110,12 +145,21 @@ class Net:
                 self.active_slots[s.s].remove(s)
                 s.s = 3
 
+        logger.debug(f"Net.step({x}, {y}, {c}) finished")
+
     def get_point(self, x: int, y: int):
         #print (x, y)
-        return self.all_points[x * 15 + y]
+        p = self.all_points[x * self.n + y]
+        #logger.debug(f"Net.get_point({x}, {y}) -> {p}")
+        return p
 
 class Game:
-    def __init__(self):
+    def __init__(self, n: int):
+
+        logger.debug("Game.__init__ started")
+
+        self.net = Net(n)
+
         self.is_play = False
         self.is_run = False
         self.is_busy = False
@@ -126,13 +170,15 @@ class Game:
         #self.main = main
         self.name_c = ["", "Black", "White"]
 
-    def play(self):
-        #self.desk.init()
-        #self.app.desk.draw_grid()
+        logger.debug("Game.__init__ finished")
 
-        self.is_play = True
-        self.is_run = False
-        self.is_busy = False
+    # def play(self):
+    #     #self.desk.init()
+    #     #self.app.desk.draw_grid()
+
+    #     self.is_play = True
+    #     self.is_run = False
+    #     self.is_busy = False
 
     #     if self.main.mode() == 0:
     #         self.main.action_step.disabled = False
@@ -208,14 +254,14 @@ class Game:
     #     self.add_step(x, y, 1 - self.n_step % 2, mes)
     #     return self.n_step
 
-    def go(self, auto: bool, x: int, y: int):
-        ret = 0
-        if auto:
-           ret = self.next_step()
-        else:
-           ret = self.manual_step(x, y)
+    # def go(self, auto: bool, x: int, y: int):
+    #     ret = 0
+    #     if auto:
+    #        ret = self.next_step()
+    #     else:
+    #        ret = self.manual_step(x, y)
 
-        self.app.status.text = "Finish! -> {0}".format(self.mes) if ret < 0 else "Step {0} -> {1}".format(ret, self.mes)
+    #     self.app.status.text = "Finish! -> {0}".format(self.mes) if ret < 0 else "Step {0} -> {1}".format(ret, self.mes)
 
     #     if self.app.mode() == 0:
     #         self.app.action_back.disabled = False
@@ -254,144 +300,145 @@ class Game:
     #         self.add_step(x, y, 1 - self.n_step % 2, self.mes)
     #         return self.n_step
 
-    # def check_win(self, c):
-    #     for s in self.app.net.active_slots[c]:
-    #         if s.r == 5:
-    #             self.mes = self.name_c[c] + " :: win!!!"
-    #             return True
-    #     return False
+    def check_win(self, c: int):
+        for s in self.net.active_slots[c]:
+            if s.r == 5:
+                self.mes = self.name_c[c] + " :: win!!!"
+                return True
+        return False
 
-    # def check_draw(self):
-    #     if len(self.app.net.active_slots[0]) == 0 and \
-    #             len(self.app.net.active_slots[1]) == 0 and \
-    #             len(self.app.net.active_slots[2]) == 0:
-    #         self.mes = " draw :("
-    #         return True
-    #     else:
-    #         return False
+    def check_draw(self):
+        if len(self.net.active_slots[0]) == 0 and \
+                len(self.net.active_slots[1]) == 0 and \
+                len(self.net.active_slots[2]) == 0:
+            self.mes = " draw :("
+            return True
+        else:
+            return False
 
-    # def calc_point(self, c):
+    def calc_point(self, c: int) -> Point:
+        logger.debug(f"Game.calc_point({c}) started")
 
-    #     self.mes = self.name_c[c] + " :: auto :: "
+        self.mes = self.name_c[c] + " :: auto :: "
 
-    #     ret = self.find_slot_4(c)
-    #     if len(ret) == 0:
-    #         ret = self.find_slot_4(3 - c)
-    #     if len(ret) == 0:
-    #         ret = self.find_point_x(c, 2, 1)
+        ret = self.find_slot_4(c)
+        if len(ret) == 0:
+            ret = self.find_slot_4(3 - c)
+        if len(ret) == 0:
+            ret = self.find_point_x(c, 2, 1)
 
-    #     if len(ret) == 0:
-    #         ret = self.find_point_x(3 - c, 2, 1)
-    #     if len(ret) == 0:
+        if len(ret) == 0:
+            ret = self.find_point_x(3 - c, 2, 1)
+        if len(ret) == 0:
 
-    #         ret = self.find_point_x(c, 1, 5)
-    #     if len(ret) == 0:
-    #         ret = self.find_point_x(3 - c, 1, 5)
-    #     if len(ret) == 0:
+            ret = self.find_point_x(c, 1, 5)
+        if len(ret) == 0:
+            ret = self.find_point_x(3 - c, 1, 5)
+        if len(ret) == 0:
 
-    #         ret = self.find_point_x(c, 1, 4)
-    #     if len(ret) == 0:
-    #         ret = self.find_point_x(3 - c, 1, 4)
+            ret = self.find_point_x(c, 1, 4)
+        if len(ret) == 0:
+            ret = self.find_point_x(3 - c, 1, 4)
 
-    #     if len(ret) == 0:
-    #         ret = self.find_point_x(c, 1, 3)
-    #     if len(ret) == 0:
-    #         ret = self.find_point_x(3 - c, 1, 3)
+        if len(ret) == 0:
+            ret = self.find_point_x(c, 1, 3)
+        if len(ret) == 0:
+            ret = self.find_point_x(3 - c, 1, 3)
 
-    #     if len(ret) == 0:
-    #         ret = self.find_point_x(c, 1, 2)
-    #     if len(ret) == 0:
-    #         ret = self.find_point_x(3 - c, 1, 2)
+        if len(ret) == 0:
+            ret = self.find_point_x(c, 1, 2)
+        if len(ret) == 0:
+            ret = self.find_point_x(3 - c, 1, 2)
 
-    #     if len(ret) == 0:
-    #         ret = self.find_point_x(c, 1, 1)
-    #     if len(ret) == 0:
-    #         ret = self.find_point_x(3 - c, 1, 1)
+        if len(ret) == 0:
+            ret = self.find_point_x(c, 1, 1)
+        if len(ret) == 0:
+            ret = self.find_point_x(3 - c, 1, 1)
 
-    #     if len(ret) == 0:
-    #         ret = self.find_point_x(c, 0, 10)
-    #     if len(ret) == 0:
-    #         ret = self.find_point_x(3 - c, 0, 10)
+        if len(ret) == 0:
+            ret = self.find_point_x(c, 0, 10)
+        if len(ret) == 0:
+            ret = self.find_point_x(3 - c, 0, 10)
 
-    #     if len(ret) == 0:
-    #         ret = self.find_point_x(c, 0, 9)
-    #     if len(ret) == 0:
-    #         ret = self.find_point_x(3 - c, 0, 9)
+        if len(ret) == 0:
+            ret = self.find_point_x(c, 0, 9)
+        if len(ret) == 0:
+            ret = self.find_point_x(3 - c, 0, 9)
 
-    #     if len(ret) == 0:
-    #         ret = self.find_point_x(c, 0, 8)
-    #     if len(ret) == 0:
-    #         ret = self.find_point_x(3 - c, 0, 8)
+        if len(ret) == 0:
+            ret = self.find_point_x(c, 0, 8)
+        if len(ret) == 0:
+            ret = self.find_point_x(3 - c, 0, 8)
 
-    #     if len(ret) == 0:
-    #         ret = self.find_point_x(c, 0, 7)
-    #     if len(ret) == 0:
-    #         ret = self.find_point_x(3 - c, 0, 7)
+        if len(ret) == 0:
+            ret = self.find_point_x(c, 0, 7)
+        if len(ret) == 0:
+            ret = self.find_point_x(3 - c, 0, 7)
 
-    #     if len(ret) == 0:
-    #         ret = self.calc_point_max_rate(c)
+        if len(ret) == 0:
+            ret = self.calc_point_max_rate(c)
 
     #     #mes = ret[0].m;
 	# 	#return ret[0].p;
 	# 	#i = int(Math.random() * ret.length)
-    #     o = random.choice(ret)
-    #     self.mes = o["m"]
-    #     return o["p"]
+        o = random.choice(ret)
+        self.mes = o[1]
+        return o[0]
 
-    # def find_slot_4(self, c):
-    #     ret = []
-    #     m = 0
-    #     for s in self.app.net.active_slots[c]:
-    #         if s.r == 4:
-    #             for p in s.points:
-    #                 if p.s == 0:
-    #                     m = "{0} {1} :: find_slot_4 -> -> ({2},{3})".format(self.mes, self.name_c[c], p.x, p.y)
-    #                     ret.append({"p": p, "m": m})
-    #     return ret
+    def find_slot_4(self, c: int):
+        ret: List[Tuple[Point, str]] = []
+        m = 0
+        for s in self.net.active_slots[c]:
+            if s.r == 4:
+                for p in s.points:
+                    if p.s == 0:
+                        m = "{0} {1} :: find_slot_4 -> -> ({2},{3})".format(self.mes, self.name_c[c], p.x, p.y)
+                        ret.append((p, m))
+        return ret
 
-    # def find_point_x(self, c, r, b):
-    #     ret = []
-    #     m = ""
-    #     for p in self.app.net.empty_points:
-    #         i = 0
-    #         for s in p.slots:
-    #             if s.s == c and s.r > r:
-    #                 i += 1
-    #         if i > b:
-    #             m = "{0} {1} :: find_point_x({2},{3}) -> ({4},{5})".format(self.mes, self.name_c[c], r, b, p.x, p.y)
-    #             ret.append({"p": p, "m": m})
+    def find_point_x(self, c: int, r: int, b: int):
+        ret: List[Tuple[Point, str]] = []
+        m = ""
+        for p in self.net.empty_points:
+            i = 0
+            for s in p.slots:
+                if s.s == c and s.r > r:
+                    i += 1
+            if i > b:
+                m = "{0} {1} :: find_point_x({2},{3}) -> ({4},{5})".format(self.mes, self.name_c[c], r, b, p.x, p.y)
+                ret.append((p, m))
 
-    #     return ret
+        return ret
 
-    # def calc_point_max_rate(self, c):
-    #     ret = []
-    #     m = ""
-    #     r = -1
-    #     d = 0
-    #     i = 0
+    def calc_point_max_rate(self, c: int):
+        ret: List[Tuple[Point, str]] = []
+        m = ""
+        r = -1
+        d = 0
+        i = 0
 
-    #     for p in self.app.net.empty_points:
-    #         d = 0
-    #         for s in p.slots:
-    #             if s.s == 0:
-    #                 d += 1
-    #             elif s.s == c:
-    #                 d += (1 + s.r) * (1 + s.r)
-    #             elif s.s != 3:
-    #                 d += (1 + s.r) * (1 + s.r)
+        for p in self.net.empty_points:
+            d = 0
+            for s in p.slots:
+                if s.s == 0:
+                    d += 1
+                elif s.s == c:
+                    d += (1 + s.r) * (1 + s.r)
+                elif s.s != 3:
+                    d += (1 + s.r) * (1 + s.r)
 
-    #         if d > r:
-    #             i = 1
-    #             r = d
-    #             ret = []
-    #             m = "{0} {1} :: point_max_rate({2},{3}) -> ({4},{5})".format(self.mes, self.name_c[c], i, r, p.x, p.y)
-    #             ret.append({"p": p, "m": m})
-    #         elif d == r:
-    #             i += 1
-    #             m = "{0} {1} :: point_max_rate({2},{3}) -> ({4},{5})".format(self.mes, self.name_c[c], i, r, p.x, p.y)
-    #             ret.append({"p": p, "m": m})
+            if d > r:
+                i = 1
+                r = d
+                ret = []
+                m = "{0} {1} :: point_max_rate({2},{3}) -> ({4},{5})".format(self.mes, self.name_c[c], i, r, p.x, p.y)
+                ret.append((p, m))
+            elif d == r:
+                i += 1
+                m = "{0} {1} :: point_max_rate({2},{3}) -> ({4},{5})".format(self.mes, self.name_c[c], i, r, p.x, p.y)
+                ret.append((p, m))
 
-    #     return ret
+        return ret
 
     # def add_step(self, x, y, c, mes):
     #     self.app.steps[self.app.qsteps] = {"x": x, "y": y, "mes": mes}

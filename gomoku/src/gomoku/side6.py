@@ -1,9 +1,11 @@
+from __future__ import annotations
+import logging
 import sys
 import os
 from pathlib import Path
 #import random
 from typing import List
-from gomoku.game import Game, Net
+from gomoku.game import Game
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -21,8 +23,27 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QAction, QIcon, QPixmap # Для дій та іконок в тулбарі
 from PySide6.QtCore import Slot, Qt # Для вирівнювання або інших констант Qt
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# Щоб повідомлення виводилися на консоль, потрібно додати обробник (handler)
+# Перевіряємо, чи вже є обробники, щоб уникнути дублювання виводу при повторному імпорті модуля
+if not logger.handlers:
+    # Створюємо обробник для виводу на стандартний потік помилок (консоль)
+    handler = logging.StreamHandler(sys.stderr)
+
+    # (Опціонально) Встановлюємо рівень для обробника (зазвичай такий самий, як у логера, або нижчий)
+    #handler.setLevel(logging.DEBUG)
+
+    # (Опціонально) Встановлюємо формат виводу повідомлень
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+
+    # Додаємо обробник до логера
+    logger.addHandler(handler)
+
 class Desk(QWidget):
-    def __init__(self, n: int, parent: QWidget | None = None):
+    def __init__(self, n: int, game: Game, parent: MainWindow | None = None):
         """
         Ініціалізує GridWidget.
 
@@ -30,6 +51,11 @@ class Desk(QWidget):
             n (int): Розмір решітки (n x n).
             parent (QWidget, optional): Батьківський віджет. За замовчуванням None.
         """
+
+        logger.debug("Desk.__init__ started")
+
+        self.main = parent
+
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True) 
         
@@ -51,9 +77,22 @@ class Desk(QWidget):
         # Створюємо QIcon. Можна завантажити з файла або з ресурсів.
         # Приклад завантаження з файла:
         image_path: str = os.path.join(current_dir, 'assets', 'img', 'Empty.png')
-        pixmap = QPixmap(image_path)
-        self.icon_empty = QIcon(pixmap)
+        pixmap_empty = QPixmap(image_path)
+        self.icon_empty = QIcon(pixmap_empty)
+
+        image_path: str = os.path.join(current_dir, 'assets', 'img', 'Black.png')
+        pixmap_black = QPixmap(image_path)
+        icon_black = QIcon(pixmap_black)
+
+        image_path: str = os.path.join(current_dir, 'assets', 'img', 'White.png')
+        pixmap_white = QPixmap(image_path)
+        icon_white = QIcon(pixmap_white)
+
+        self.icon_colors: List[QIcon] = [icon_black, icon_white]
+
         style = "{padding: 0px; border: none; margin: 0px; background-color: red;}"
+
+        
 
         self.grid_size = n
         #self.widget_type = widget_type
@@ -77,8 +116,8 @@ class Desk(QWidget):
                 widget.setObjectName(obj_name)
                 widget.setStyleSheet(f"#{obj_name} {style}")
                 widget.setIcon(self.icon_empty)
-                widget.setIconSize(pixmap.size())
-                widget.setFixedSize(pixmap.size())
+                widget.setIconSize(pixmap_empty.size())
+                widget.setFixedSize(pixmap_empty.size())
                 widget.setToolTip(f"{row},{col}")
                 widget.adjustSize()
                 
@@ -94,6 +133,10 @@ class Desk(QWidget):
         # Встановлюємо QGridLayout як основний компонувальник для GridWidget
         self.setLayout(grid_layout)
 
+        self.game = game
+
+        logger.debug("Desk.__init__ finished")
+
     # Приклад методу для доступу до окремого віджета
     def get_widget_at(self, row: int, col: int) -> QPushButton | None:
         if 0 <= row < self.grid_size and 0 <= col < self.grid_size:
@@ -103,15 +146,34 @@ class Desk(QWidget):
     # Приклад обробника сигналу для кнопок (якщо widget_type=QPushButton)
     @Slot(int, int)
     def on_button_clicked(self, row: int, col: int):
-        print(f"Натиснуто кнопку в позиції ({row}, {col})")
+        logger.debug(f"Натиснуто кнопку в позиції ({row}, {col})")
         # Додайте вашу логіку обробки натискання кнопки тут
+        if self.game.is_play and not self.game.is_run and not self.game.is_busy:
+            y, x = row, col
+            if self.game.net.get_point(x, y).s == 0 and isinstance(self.main, MainWindow):
+                logger.debug(f"Manual step: {x}, {y}")
+                self.main.go(False, x, y)
+
 
     def init(self):
+
+        logger.debug("Desk.init started")
+
         for row in range(self.grid_size):
             for col in range(self.grid_size):
                 widget = self.get_widget_at(row, col)
                 if isinstance(widget, QPushButton):
                     widget.setIcon(self.icon_empty)
+
+        logger.debug("Desk.init finshed")
+
+    def draw_step(self, x: int, y: int, c: int):
+        logger.debug(f"Desk.draw_step({x}, {y}, {c}) started")
+        widget = self.get_widget_at(y, x)
+        if isinstance(widget, QPushButton):
+            widget.setIcon(self.icon_colors[c])
+        logger.debug(f"Desk.draw_step({x}, {y}, {c}) finished")
+
 class Step:
     def __init__(self, x: int, y: int, msg: str):
         self.x = x
@@ -121,6 +183,9 @@ class Step:
 
 class MainWindow(QMainWindow):
     def __init__(self):
+
+        logger.debug("MainWindow.__init__ started")
+
         super().__init__()
 
         self.n = 15
@@ -130,7 +195,8 @@ class MainWindow(QMainWindow):
         self.setContentsMargins(40, 0, 40, 0)
 
         # 1. Створення та встановлення центрального віджета
-        self.desk = Desk(self.n, self) # Створюємо екземпляр вашого віджета
+        self.game = Game(self.n)
+        self.desk = Desk(self.n, self.game, self) # Створюємо екземпляр вашого віджета
         
         self.setCentralWidget(self.desk) # Встановлюємо його як центральний
 
@@ -203,10 +269,11 @@ class MainWindow(QMainWindow):
         # =======================================================
 
         self.mode = lambda : {"Manual":0, "Black":1, "White":2}[self.mode_box.currentText()]
-
-        self.game = Game()
-        self.net = Net()
+        
         self.steps: List[Step] = [Step(-1, -1, "")]*(self.n*self.n)
+        self.name_c = ["", "Black", "White"]
+
+        logger.debug("MainWindow.__init__ finshed")
         
 
     @Slot()
@@ -215,7 +282,9 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def new(self):
+        logger.debug("MainWindow.new clicked")
         self.play()
+        logger.debug("MainWindow.new finished")
 
     @Slot()
     def step(self):
@@ -235,6 +304,9 @@ class MainWindow(QMainWindow):
             self.game.is_busy = False
 
     def play(self):
+
+        logger.debug("MainWindow.play started")
+
         self.desk.init()
         #self.app.desk.draw_grid()
 
@@ -251,18 +323,20 @@ class MainWindow(QMainWindow):
         self.run_action.setEnabled(True) #disabled = False
         self.mode_box.setDisabled(True) #disabled = True
 
-        self.net.init()
+        self.game.net.init()
 
         self.qsteps = 0
         self.add_step(7, 7, 0, "Start")
 
         self.mes = "Start"
         self.n_step = 1
-        self.net.step(7, 7, 1)
+        self.game.net.step(7, 7, 1)
         self.statusBar().showMessage("New game")
 
         if self.mode() == 1:
            self.run(False)
+
+        logger.debug("MainWindow.play finished")
 
     # def run(self, r: bool):
     #     if self.game.is_play:
@@ -284,43 +358,70 @@ class MainWindow(QMainWindow):
     #     self.app.action_step.disabled = False
 
     def add_step(self, x: int, y: int, c: int, mes: str):
+        logger.debug(f"MainWindow.add_step({x}, {y}, {c}) started")
+
         self.steps[self.qsteps] = Step(x, y, mes)
         self.qsteps += 1
-        self.desk.draw_step(x, y, self.app.colors[c])
+        self.desk.draw_step(x, y, c)
+
+        logger.debug(f"MainWindow.add_step({x}, {y}, {c}) finished")
 
     def go(self, auto: bool, x: int, y: int):
-        ret = 0
+        ret: int = 0
         if auto:
            ret = self.next_step()
         else:
            ret = self.manual_step(x, y)
 
-        self.app.status.text = "Finish! -> {0}".format(self.mes) if ret < 0 else "Step {0} -> {1}".format(ret, self.mes)
+        self.statusBar().showMessage("Finish! -> {0}".format(self.mes) if ret < 0 else "Step {0} -> {1}".format(ret, self.mes))
 
-    #     if self.app.mode() == 0:
-    #         self.app.action_back.disabled = False
+        if self.mode() == 0:
+            self.back_action.setEnabled(True) #disabled = False
 
-    #     if ret < 0 or ret > 224:
-    #         self.app.action_run.disabled = True
-    #         self.app.action_step.disabled = True
-    #         self.app.action_mode.disabled = False
+        if ret < 0 or ret > 224:
+            self.run_action.setDisabled(True)
+            self.step_action.setDisabled(True)
+            self.mode_box.setEnabled(True) # disabled = False
 
-    #         self.is_run = False
-    #         self.is_play = False
+            self.game.is_run = False
+            self.game.is_play = False
 
-    #     elif not auto and self.app.mode() > 0:
-    #         self.go(True, 7, 7)
-    #     elif self.is_run:
-    #         self.go(True, 7, 7)
+        elif not auto and self.mode() > 0:
+            self.go(True, 7, 7)
+        elif self.game.is_run:
+            self.go(True, 7, 7)
 
+    def next_step(self):
+        self.n_step += 1
+
+        if self.game.check_win(3 - (2 - self.n_step % 2)) or self.game.check_draw():
+            return -1
+        else:
+            p = self.game.calc_point(2 - self.n_step % 2)
+            self.game.net.step(p.x, p.y, 2 - self.n_step % 2)
+            self.add_step(p.x, p.y, 1 - self.n_step % 2, self.mes)
+            return self.n_step
+
+    def manual_step(self, x: int, y: int):
+        self.n_step += 1
+        if self.game.check_win(3 - (2 - self.n_step % 2)) or self.game.check_draw():
+            return -1
+        else:
+            self.game.net.step(x, y, 2 - self.n_step % 2)
+            self.mes = "{0}  :: manual ({1},{2})".format(self.name_c[2 - self.n_step % 2], x, y )
+            self.add_step(x, y, 1 - self.n_step % 2, self.mes)
+            return self.n_step
 
     
 def main():
-    
-    app = QApplication(sys.argv) # Передаємо аргументи командного рядка
+    logger.info("Старт програми.")
 
-    global win 
+    app = QApplication(sys.argv) # Передаємо аргументи командного рядка
+    
     win = MainWindow() # Створюємо екземпляр головного вікна
     win.show() # Показуємо вікно
+    ret = app.exec() # Запускаємо цикл подій
 
-    sys.exit(app.exec()) # Запускаємо цикл подій
+    logger.info("Програма завершена.")
+
+    sys.exit(ret) 
