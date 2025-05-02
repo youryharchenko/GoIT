@@ -215,18 +215,18 @@ class MainWindow(QMainWindow):
         self.mode_box.setCurrentText("Black")
         toolbar.addWidget(self.mode_box)
 
-        self.step_action = QAction("Step", self) # Можна додати іконку
-        self.step_action.triggered.connect(self.step) # Зв'язуємо дію із закриттям вікна
+        self.step_action = QAction("Step", self) 
+        self.step_action.triggered.connect(self.run_step)
         self.step_action.setDisabled(True)
         toolbar.addAction(self.step_action)
 
-        self.back_action = QAction("Back", self) # Можна додати іконку
-        self.back_action.triggered.connect(self.back) # Зв'язуємо дію із закриттям вікна
+        self.back_action = QAction("Back", self) 
+        self.back_action.triggered.connect(self.back) 
         self.back_action.setDisabled(True)
         toolbar.addAction(self.back_action)
 
-        self.run_action = QAction("Run", self) # Можна додати іконку
-        self.run_action.triggered.connect(self.run) # Зв'язуємо дію із закриттям вікна
+        self.run_action = QAction("Run", self) 
+        self.run_action.triggered.connect(self.run_auto) 
         self.run_action.setDisabled(True)
         toolbar.addAction(self.run_action)
 
@@ -283,79 +283,98 @@ class MainWindow(QMainWindow):
     @Slot()
     def new(self):
         logger.debug("MainWindow.new clicked")
+        # Ініціалізуємо нову гру
         self.play()
         logger.debug("MainWindow.new finished")
 
     @Slot()
-    def step(self):
-        pass
+    def run_step(self):
+        self.run(False)
 
     @Slot()
     def back(self):
-        pass
+        self.is_play = True
+        self.is_busy = True
 
-    @Slot(bool)
-    def run(self, r: bool):
+        self.replay(1)
+
+        self.is_busy = False
+
+        self.run_action.setEnabled(True) #disabled = False
+        self.step_action.setEnabled(True) #disabled = False
+
+    @Slot()
+    def run_auto(self):
+        self.run(True)
+
+    def run(self, r: bool = True):
+        # Якщо гра триває, то програиа почнає шукати хід
         if self.game.is_play:
             self.statusBar().showMessage("Thinking...")
+
+            # Програма шукає хід: Так
             self.game.is_busy = True
+            # Встановлюємо: чи auto чи ні
             self.game.is_run = r
+            # Програма йде шукати хід
             self.go(True, 0, 0)
+            # Закінчила шукати
             self.game.is_busy = False
 
     def play(self):
 
         logger.debug("MainWindow.play started")
 
+        # Ініціалізуємо дошку
         self.desk.init()
-        #self.app.desk.draw_grid()
-
+        
+        # При старті гри:
+        # Гра триває: Так
         self.game.is_play = True
+        # Auto: Ні
         self.game.is_run = False
+        # Програма шукає хід: Ні
         self.game.is_busy = False
 
         if self.mode() == 0:
+           # Якщо ручний режим: 
+           # Дозволяємр кнопку "Step"
            self.step_action.setEnabled(True) #disabled = False
         else:
+           # Якщо режим гри з програмою: 
+           # Забороняємо кнопку "Step"
            self.step_action.setDisabled(True)
+           # Забороняємо кнопку "Back"
            self.back_action.setDisabled(True)
 
+        # Дозволяємр кнопку "Run" - auto гра
         self.run_action.setEnabled(True) #disabled = False
+        # Забороняємо вибір режиму
         self.mode_box.setDisabled(True) #disabled = True
 
+        # Ініціалізуємо простір гри
         self.game.net.init()
 
+        # Робимо перший хід в центр
         self.qsteps = 0
         self.add_step(7, 7, 0, "Start")
 
         self.mes = "Start"
         self.n_step = 1
+
+        # Передаємо перщий хід в простір гри
         self.game.net.step(7, 7, 1)
+
         self.statusBar().showMessage("New game")
 
+        # Якщо людина грає "Black": передаємо роботу над другим ходом програмі (не auto), 
+        # інакше чекаємо ходу від людини
         if self.mode() == 1:
            self.run(False)
 
         logger.debug("MainWindow.play finished")
 
-    # def run(self, r: bool):
-    #     if self.game.is_play:
-    #         self.statusBar().showMessage("Thinking...")
-    #         self.game.is_busy = True
-    #         self.game.is_run = r
-    #         self.go(True, 0, 0)
-    #         self.game.is_busy = False
-
-    # def back(self):
-    #     self.is_play = True
-    #     self.is_busy = True
-
-    #     self.replay(1)
-
-    #     self.is_busy = False
-
-    #     self.app.action_run.disabled = False
-    #     self.app.action_step.disabled = False
+        self.game.is_busy = False
 
     def add_step(self, x: int, y: int, c: int, mes: str):
         logger.debug(f"MainWindow.add_step({x}, {y}, {c}) started")
@@ -368,17 +387,22 @@ class MainWindow(QMainWindow):
 
     def go(self, auto: bool, x: int, y: int):
         ret: int = 0
+        
         if auto:
+           # Якщо auto: програма буде шукати наступний хід
            ret = self.next_step()
         else:
            ret = self.manual_step(x, y)
 
-        self.statusBar().showMessage("Finish! -> {0}".format(self.mes) if ret < 0 else "Step {0} -> {1}".format(ret, self.mes))
+        self.statusBar().showMessage(f"Finish! -> {self.mes}" if ret < 0 else f"Step {ret} -> {self.mes}")
 
         if self.mode() == 0:
+            # Якщо ручний режим: 
+            # Дозволяємр кнопку "Back"
             self.back_action.setEnabled(True) #disabled = False
 
         if ret < 0 or ret > 224:
+            # Якщо гра завершена: 
             self.run_action.setDisabled(True)
             self.step_action.setDisabled(True)
             self.mode_box.setEnabled(True) # disabled = False
@@ -391,18 +415,24 @@ class MainWindow(QMainWindow):
         elif self.game.is_run:
             self.go(True, 7, 7)
 
-    def next_step(self):
+    def next_step(self) -> int:
+        # Номер наступного ходу
         self.n_step += 1
 
         if self.game.check_win(3 - (2 - self.n_step % 2)) or self.game.check_draw():
+            # Якщо вже перемога або нічия, то гра завершена
             return -1
         else:
+            # Інакше обчислюємо хід на просторі гри та отримуємо позицію (Point) ходу
             p = self.game.calc_point(2 - self.n_step % 2)
+             # Передаємо отриманий хід в простір гри
             self.game.net.step(p.x, p.y, 2 - self.n_step % 2)
+            # Додаємо хід на дошку
             self.add_step(p.x, p.y, 1 - self.n_step % 2, self.mes)
+            # Повертаємо номер ходу
             return self.n_step
 
-    def manual_step(self, x: int, y: int):
+    def manual_step(self, x: int, y: int) -> int:
         self.n_step += 1
         if self.game.check_win(3 - (2 - self.n_step % 2)) or self.game.check_draw():
             return -1
@@ -411,7 +441,39 @@ class MainWindow(QMainWindow):
             self.mes = "{0}  :: manual ({1},{2})".format(self.name_c[2 - self.n_step % 2], x, y )
             self.add_step(x, y, 1 - self.n_step % 2, self.mes)
             return self.n_step
+        
+    def replay(self, k: int):
+        n = self.n_step - k
 
+        if n > 0:
+            self.game.net.init()
+            self.desk.init()
+            self.n_step = 1
+            self.game.net.step(7, 7, 1)
+            self.qsteps = 0
+            self.add_step(7, 7, 0, "")
+            self.is_busy = False
+            self.is_play = True
+            self.is_run = False
+
+            self.statusBar().showMessage("Start")
+
+        if n > 1:
+            msg = ""
+            for i in range(1, n):
+                st = self.steps[i]
+                msg = st.msg
+                #self.app.steps[i] = None
+                self.replay_step(st.x, st.y, st.msg)
+
+            self.statusBar().showMessage(f"Step {self.n_step} -> {msg}") 
+
+    def replay_step(self, x: int, y: int, mes: str):
+        self.n_step += 1
+
+        self.game.net.step(x, y, 2 - self.n_step % 2)
+        self.add_step(x, y, 1 - self.n_step % 2, mes)
+        return self.n_step
     
 def main():
     logger.info("Старт програми.")

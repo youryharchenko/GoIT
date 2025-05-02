@@ -377,10 +377,7 @@ class Game:
 
         if len(ret) == 0:
             ret = self.calc_point_max_rate(c)
-
-    #     #mes = ret[0].m;
-	# 	#return ret[0].p;
-	# 	#i = int(Math.random() * ret.length)
+    
         o = random.choice(ret)
         self.mes = o[1]
         return o[0]
