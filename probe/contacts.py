@@ -25,5 +25,25 @@ class Contacts:
             return
         self.contacts.remove(item)
 
-contacts = Contacts()
+import pickle
 
+def write_contacts_to_file(filename, contacts):
+    with open(filename, "wb") as f:
+        pickle.dump(contacts, f)
+        
+
+
+def read_contacts_from_file(filename):
+    with open(filename, "rb") as f:
+        contacts = pickle.load(f)
+    return contacts
+
+write_contacts_to_file("contacts.picle", {
+    "name": "Allen Raymond",
+    "email": "nulla.ante@vestibul.co.uk",
+    "phone": "(992) 914-3792",
+    "favorite": False,
+})
+
+contacts = read_contacts_from_file("contacts.picle")
+print(contacts)

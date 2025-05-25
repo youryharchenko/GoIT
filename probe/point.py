@@ -1,3 +1,5 @@
+from random import randrange
+
 class Point:
 
     def __init__(self, x, y):
@@ -80,6 +82,28 @@ class Vector:
         
     def __str__(self):
         return f"Vector({self.coordinates.x},{self.coordinates.y})"
+    
+class Iterable:
+    def __init__(self, max_vectors, max_points):
+        self.current_index = 0
+        self.vectors = [Vector(Point(randrange(0, max_points), randrange(0, max_points))) for i in range(max_vectors)]
+        self.max_vectors = max_vectors
+        self.max_points = max_points
+
+    def __next__(self):
+        i = self.current_index 
+        if i < self.max_vectors:
+            self.current_index += 1
+            return self.vectors[i]
+        raise StopIteration
+        
+class RandomVectors:
+    def __init__(self, max_vectors=10, max_points=50):
+        self.max_vectors = max_vectors
+        self.max_points = max_points
+
+    def __iter__(self):
+        return Iterable(self.max_vectors, self.max_points)
             
 p = Point(0, 0)
 print(f"{p.x} {p.y}")
@@ -101,5 +125,10 @@ print(f"{v[0]} {v[1]}")
 print(v)
 print(v())
 print(v(5))
+
+vectors = RandomVectors(5, 10)
+
+for vector in vectors:
+    print(vector)
 
 
