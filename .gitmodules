@@ -4,3 +4,6 @@
 [submodule "goit-pycore-hw-04"]
 	path = goit-pycore-hw-04
 	url = https://github.com/youryharchenko/goit-pycore-hw-04.git
+[submodule "goit-pycore-hw-05"]
+	path = goit-pycore-hw-05
+	url = https://github.com/youryharchenko/goit-pycore-hw-05.git
