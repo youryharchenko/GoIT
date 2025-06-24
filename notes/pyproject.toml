@@ -1,0 +1,32 @@
+[project]
+name = "notes"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "youry07",email = "youry@ukr.net"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+    "rich (>=14.0.0,<15.0.0)",
+    "prompt-toolkit (>=3.0.51,<4.0.0)",
+    "kuzu (>=0.10.0,<0.11.0)",
+    "appdirs (>=1.4.4,<2.0.0)"
+]
+
+[project.scripts]
+main = "notes.main:main"
+
+[tool.poetry]
+packages = [{include = "notes", from = "src"}]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+black = "^25.1.0"
+flake8 = "^7.2.0"
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
