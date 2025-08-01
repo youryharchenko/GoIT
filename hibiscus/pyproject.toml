@@ -1,0 +1,33 @@
+[project]
+name = "hibiscus"
+version = "0.1.0"
+description = ""
+
+authors = [
+    {name = "youry07",email = "youry@ukr.net"}
+]
+
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+
+dependencies = [
+    "pyside6 (>=6.9.1,<7.0.0)",
+    "appdirs (>=1.4.4,<2.0.0)"
+
+]
+
+[project.scripts]
+main = "hibiscus.main:main"
+
+[tool.poetry]
+packages = [{include = "hibiscus", from = "src"}]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+black = "^25.1.0"
+flake8 = "^7.2.0"
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

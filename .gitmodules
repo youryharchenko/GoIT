@@ -16,3 +16,6 @@
 [submodule "goit-pycore-hw-08"]
 	path = goit-pycore-hw-08
 	url = https://github.com/youryharchenko/goit-pycore-hw-08.git
+[submodule "lotus"]
+	path = lotus
+	url = https://github.com/i-form-neo/lotus.git
