@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
     QSplitter,
     QTreeWidget,
     QTabWidget,
+    QInputDialog,
+    QFileDialog,
     #QStatusBar,
     QWidget,
     QGridLayout,
@@ -62,6 +64,17 @@ except Exception as e:
     logger.warning(f"Load config error: {e}, create new")
     config = {}
 
+project_path = data_path.joinpath("projects")
+if not project_path.exists():
+    project_path.mkdir(parents=True, exist_ok=True)
+elif not data_path.is_dir():
+    logger.fatal(f"Path {project_path} is not dir!")
+    sys.exit(1)
+
+logger.debug(f"Projects dir: {project_path}")
+last_project = config.get("last-project", "")
+project = {}
+
 logger.debug(f"config: {config}")
 
 class MainWindow(QMainWindow):
@@ -70,7 +83,7 @@ class MainWindow(QMainWindow):
         logger.debug("MainWindow.__init__ started")
         super().__init__()
 
-        self.setWindowTitle("Hibiscus")
+        self.setWindowTitle(f"Hibiscus - {last_project.name}")
         
         #self.setContentsMargins(40, 40, 40, 40)
 
@@ -81,8 +94,40 @@ class MainWindow(QMainWindow):
 
         logger.debug("MainWindow.__init__ finshed")
 
+    def new_project(self, name: str):
+        global last_project
+        global project
+        last_project = project_path.joinpath(name)
+        config["last-project"] = last_project
+        project = self._init_project()
+        self.setWindowTitle(f"Hibiscus - {last_project.name}")
+
+    def open_project(self, name):
+        global last_project
+        global project
+        last_project = project_path.joinpath(name)
+        config["last-project"] = last_project
+        try:
+            with open(last_project, "rb") as f:
+                project = pickle.load(f)
+        except Exception as e:
+            logger.warning(f"Load project error: {e}, create new")
+            project = self._init_project()
+        self.setWindowTitle(f"Hibiscus - {last_project.name}")
+
+    def _init_project(self):
+        return {}
+
     def _makeToolBar(self) -> QToolBar:
         toolbar = QToolBar()
+
+        new_action = QAction(QIcon.fromTheme("document-new"), "New", self) 
+        new_action.triggered.connect(self.new)
+        toolbar.addAction(new_action)
+
+        open_action = QAction(QIcon.fromTheme("document-open"), "Open", self) 
+        open_action.triggered.connect(self.open)
+        toolbar.addAction(open_action)
 
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -114,14 +159,35 @@ class MainWindow(QMainWindow):
     def quit(self):
         self.close()
 
+    @Slot()
+    def new(self):
+        logger.debug(f"New clicked")
+        text, ok = QInputDialog.getText(self, "New Project", "Project name:")
+        if ok and text:
+            logger.debug(f"Name: {text}")
+            self.new_project(text)
+
+    @Slot()
+    def open(self):
+        logger.debug(f"Open clicked")
+        name, filter = QFileDialog.getOpenFileName(self, "Open Project", str(project_path))
+        logger.debug(f"Name: {name}, filter: {filter}")
+        
+        self.open_project(name)
+
     def closeEvent(self, event: QCloseEvent) -> None:
         try:
             set_config(self)
             logger.debug(f"MainWindow - closeEvent, config: {config}")
+
             with open(config_path, "wb") as f:
                 pickle.dump(config, f)
+
+            with open(last_project, "wb") as f:
+                pickle.dump(project, f)
+
         except Exception as e:
-            logger.error(f"Save config error: {e}")
+            logger.error(f"Save error: {e}")
         return super().closeEvent(event)
     
     def resizeEvent(self, event: QResizeEvent) -> None:
