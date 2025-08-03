@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QToolBar,
     QSplitter,
     QTreeWidget,
+    QTreeWidgetItem,
     QTabWidget,
     QInputDialog,
     QFileDialog,
@@ -32,6 +33,8 @@ from PySide6.QtGui import (
 from PySide6.QtCore import (
     Slot, Qt # Для вирівнювання або інших констант Qt
 )
+
+from hibiscus.project import Project
 
 app_name = "Hibiscus"
 app_author = "YouryHarchenko"
@@ -73,7 +76,7 @@ elif not data_path.is_dir():
 
 logger.debug(f"Projects dir: {project_path}")
 last_project = config.get("last-project", "")
-project = {}
+project = Project({"name": pathlib.Path(last_project).name})
 
 logger.debug(f"config: {config}")
 
@@ -92,6 +95,8 @@ class MainWindow(QMainWindow):
 
         apply_config(self)
 
+        self._apply_project()
+
         logger.debug("MainWindow.__init__ finshed")
 
     def new_project(self, name: str):
@@ -99,8 +104,9 @@ class MainWindow(QMainWindow):
         global project
         last_project = project_path.joinpath(name)
         config["last-project"] = last_project
-        project = self._init_project()
-        self.setWindowTitle(f"Hibiscus - {last_project.name}")
+        project = self._init_project(name)
+        self.setWindowTitle(f"Hibiscus - {project.name}")
+        self._apply_project()
 
     def open_project(self, name):
         global last_project
@@ -109,14 +115,38 @@ class MainWindow(QMainWindow):
         config["last-project"] = last_project
         try:
             with open(last_project, "rb") as f:
-                project = pickle.load(f)
+                project = Project(pickle.load(f))
         except Exception as e:
             logger.warning(f"Load project error: {e}, create new")
-            project = self._init_project()
-        self.setWindowTitle(f"Hibiscus - {last_project.name}")
+            project = self._init_project(name)
+        self.setWindowTitle(f"Hibiscus - {project.name}")
+        self._apply_project()
 
-    def _init_project(self):
-        return {}
+    def _init_project(self, name):
+        return Project({"name": name})
+    
+    def _apply_project(self):
+        central = self.centralWidget()
+        if not isinstance(central, QSplitter):
+            logger.error(f"Central must be QSplitter, it is {type(central) }")
+            return
+        tree = central.widget(0)
+        if not isinstance(tree, QTreeWidget):
+            logger.error(f"Left must be QTreeWidget, it is {type(tree) }")
+            return
+        tabs = central.widget(1)
+        if not isinstance(tabs, QTabWidget):
+            logger.error(f"Left must be QTabWidget, it is {type(tabs) }")
+            return
+                
+        tree.clear()
+        
+        tree.setHeaderLabels([project.name])
+        
+        tree.addTopLevelItem(QTreeWidgetItem(["DataFrames"]))
+        tree.addTopLevelItem(QTreeWidgetItem(["Graphs"]))
+        
+      
 
     def _makeToolBar(self) -> QToolBar:
         toolbar = QToolBar()
@@ -128,6 +158,22 @@ class MainWindow(QMainWindow):
         open_action = QAction(QIcon.fromTheme("document-open"), "Open", self) 
         open_action.triggered.connect(self.open)
         toolbar.addAction(open_action)
+
+        toolbar.addSeparator()
+
+        add_action = QAction(QIcon.fromTheme("list-add"), "Add", self) 
+        add_action.triggered.connect(self.add)
+        toolbar.addAction(add_action)
+
+        edit_action = QAction(QIcon.fromTheme("document-properties"), "Edit", self) 
+        edit_action.triggered.connect(self.edit)
+        toolbar.addAction(edit_action)
+
+        remove_action = QAction(QIcon.fromTheme("list-remove"), "Remove", self) 
+        remove_action.triggered.connect(self.remove)
+        toolbar.addAction(remove_action)
+
+        toolbar.addSeparator()
 
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -149,6 +195,21 @@ class MainWindow(QMainWindow):
     
     def _makeTree(self, parent):
         tree = QTreeWidget(parent=parent, columnCount=1)
+
+        def on_header_double_clicked():
+            logger.debug(f"Tree header double clicked")
+            name, ok = QInputDialog.getText(self, "Rename Project", "New Project name:", text=project.name)
+            if ok and name:
+                logger.debug(f"Name: {name}")
+                global last_project
+                last_project = project_path.joinpath(name)
+                config["last-project"] = last_project
+                project.set_name(name)
+                self.setWindowTitle(f"Hibiscus - {project.name}")
+                tree.setHeaderLabels([project.name])
+        
+        tree.header().sectionDoubleClicked.connect(on_header_double_clicked)
+        
         return tree
     
     def _makeTabs(self, parent):
@@ -175,6 +236,18 @@ class MainWindow(QMainWindow):
         
         self.open_project(name)
 
+    @Slot()
+    def add(self):
+        logger.debug(f"Add clicked")
+
+    @Slot()
+    def edit(self):
+        logger.debug(f"Edit clicked")
+
+    @Slot()
+    def remove(self):
+        logger.debug(f"Remove clicked")
+
     def closeEvent(self, event: QCloseEvent) -> None:
         try:
             set_config(self)
@@ -184,7 +257,7 @@ class MainWindow(QMainWindow):
                 pickle.dump(config, f)
 
             with open(last_project, "wb") as f:
-                pickle.dump(project, f)
+                pickle.dump(project.data, f)
 
         except Exception as e:
             logger.error(f"Save error: {e}")
