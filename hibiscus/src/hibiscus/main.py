@@ -34,7 +34,7 @@ from PySide6.QtCore import (
     Slot, Qt # Для вирівнювання або інших констант Qt
 )
 
-from hibiscus.project import Project
+from hibiscus.project import Project, Work
 
 app_name = "Hibiscus"
 app_author = "YouryHarchenko"
@@ -80,6 +80,57 @@ project = Project({"name": pathlib.Path(last_project).name})
 
 logger.debug(f"config: {config}")
 
+class Node(QTreeWidgetItem):
+    def __init__(self, text: str):
+        super().__init__([text])
+
+    def get_text(self) -> str:
+        return(super().text(0))
+    
+    def run(self):
+        logger.warning(f"Node {self.get_text()} can not run")
+
+    def add(self):
+        logger.warning(f"Node {self.get_text()} can not add")
+
+class WorksNode(Node):
+    def __init__(self):
+        super().__init__("Works")
+
+    def _makeWorkItemNode(self):
+        text, ok = QInputDialog.getText(self.treeWidget(), "New Work", "Work name:")
+        if ok and text:
+            logger.debug(f"Work: {text}")
+            return WorkItemNode(text)
+        else:
+            return None
+    
+    def add(self):
+        logger.debug(f"Node {self.get_text()} add")
+        child = self._makeWorkItemNode()
+        if child:
+            self.treeWidget().clearSelection()
+            self.addChild(child)
+            self.setExpanded(True)
+            child.setSelected(True)
+            project.add_work(Work(child.get_text(), ""))
+
+class WorkItemNode(Node):
+    def __init__(self, name: str):
+        super().__init__(name)
+        self.work = Work(name, "")
+        
+    
+
+class DataFramesNode(Node):
+    def __init__(self):
+        super().__init__("DataFrames")
+
+class GraphsNode(Node):
+    def __init__(self):
+        super().__init__("Graphs")
+
+
 class MainWindow(QMainWindow):
 
     def __init__(self):
@@ -95,6 +146,7 @@ class MainWindow(QMainWindow):
 
         apply_config(self)
 
+        self.open_project(project.name)
         self._apply_project()
 
         logger.debug("MainWindow.__init__ finshed")
@@ -119,11 +171,13 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.warning(f"Load project error: {e}, create new")
             project = self._init_project(name)
+
+        logger.debug(f"Open Project data: {project.data}")
         self.setWindowTitle(f"Hibiscus - {project.name}")
         self._apply_project()
 
     def _init_project(self, name):
-        return Project({"name": name})
+        return Project({"name": name, "works": []})
     
     def _apply_project(self):
         central = self.centralWidget()
@@ -143,8 +197,13 @@ class MainWindow(QMainWindow):
         
         tree.setHeaderLabels([project.name])
         
-        tree.addTopLevelItem(QTreeWidgetItem(["DataFrames"]))
-        tree.addTopLevelItem(QTreeWidgetItem(["Graphs"]))
+        works_node = WorksNode()
+        for work in project.works:
+            works_node.addChild(WorkItemNode(work.name))
+        tree.addTopLevelItem(works_node)
+
+        tree.addTopLevelItem(DataFramesNode())
+        tree.addTopLevelItem(GraphsNode())
         
       
 
@@ -175,6 +234,12 @@ class MainWindow(QMainWindow):
 
         toolbar.addSeparator()
 
+        run_action = QAction(QIcon.fromTheme("media-playback-start"), "Run", self) 
+        run_action.triggered.connect(self.run)
+        toolbar.addAction(run_action)
+
+        toolbar.addSeparator()
+
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         toolbar.addWidget(spacer)
@@ -195,6 +260,7 @@ class MainWindow(QMainWindow):
     
     def _makeTree(self, parent):
         tree = QTreeWidget(parent=parent, columnCount=1)
+        tree.setSelectionMode(QTreeWidget.SelectionMode.SingleSelection)
 
         def on_header_double_clicked():
             logger.debug(f"Tree header double clicked")
@@ -211,6 +277,25 @@ class MainWindow(QMainWindow):
         tree.header().sectionDoubleClicked.connect(on_header_double_clicked)
         
         return tree
+    
+    def _get_selected_tree_item(self):
+        central = self.centralWidget() 
+        if not isinstance(central, QSplitter):
+            logger.error(f"Central must be QSplitter, it is {type(central) }")
+            return None
+        
+        tree = central.widget(0)
+        if not isinstance(tree, QTreeWidget):
+            logger.error(f"Left must be QTreeWidget, it is {type(tree) }")
+            return None
+        
+        items = tree.selectedItems()
+        if len(items) > 0:
+            return items[0]
+        
+        return None
+
+
     
     def _makeTabs(self, parent):
         tabs = QTabWidget(parent=parent)
@@ -239,6 +324,10 @@ class MainWindow(QMainWindow):
     @Slot()
     def add(self):
         logger.debug(f"Add clicked")
+        node = self._get_selected_tree_item()
+        if node and isinstance(node, Node):
+            logger.debug(f"Selected item: {node.get_text()}")
+            node.add()
 
     @Slot()
     def edit(self):
@@ -248,14 +337,23 @@ class MainWindow(QMainWindow):
     def remove(self):
         logger.debug(f"Remove clicked")
 
+    @Slot()
+    def run(self):
+        logger.debug(f"Run clicked")
+        node = self._get_selected_tree_item()
+        if node and isinstance(node, Node):
+            logger.debug(f"Selected item: {node.get_text()}")
+            node.run()
+
+
     def closeEvent(self, event: QCloseEvent) -> None:
         try:
             set_config(self)
             logger.debug(f"MainWindow - closeEvent, config: {config}")
-
             with open(config_path, "wb") as f:
                 pickle.dump(config, f)
 
+            logger.debug(f"Save Project data: {project.data}")
             with open(last_project, "wb") as f:
                 pickle.dump(project.data, f)
 
