@@ -12,7 +12,9 @@ requires-python = ">=3.12,<3.14"
 
 dependencies = [
     "pyside6 (>=6.9.1,<7.0.0)",
-    "appdirs (>=1.4.4,<2.0.0)"
+    "appdirs (>=1.4.4,<2.0.0)",
+    "jedi (>=0.19.2,<0.20.0)",
+    "docutils (>=0.22,<0.23)"
 
 ]
 
@@ -20,7 +22,7 @@ dependencies = [
 main = "hibiscus.main:main"
 
 [tool.poetry]
-packages = [{include = "hibiscus", from = "src"}]
+packages = [{include = "hibiscus", from = "src"}, {include = "pyqode", from = "src"}]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"

@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QInputDialog,
     QFileDialog,
+    QVBoxLayout,
+    QTextEdit,
     #QStatusBar,
     QWidget,
     QGridLayout,
@@ -35,6 +37,7 @@ from PySide6.QtCore import (
 )
 
 from hibiscus.project import Project, Work
+from hibiscus.codeedit import WorkCodeEdit
 
 app_name = "Hibiscus"
 app_author = "YouryHarchenko"
@@ -84,6 +87,20 @@ class Node(QTreeWidgetItem):
     def __init__(self, text: str):
         super().__init__([text])
 
+    def _get_tab_widget(self):
+        
+        central = win.centralWidget()
+        if not isinstance(central, QSplitter):
+            logger.error(f"Central must be QSplitter, it is {type(central) }")
+            return None
+        
+        tabs = central.widget(1)
+        if not isinstance(tabs, QTabWidget):
+            logger.error(f"Left must be QTabWidget, it is {type(tabs) }")
+            return None
+        
+        return tabs
+
     def get_text(self) -> str:
         return(super().text(0))
     
@@ -92,6 +109,9 @@ class Node(QTreeWidgetItem):
 
     def add(self):
         logger.warning(f"Node {self.get_text()} can not add")
+
+    def edit(self):
+        logger.warning(f"Node {self.get_text()} can not edit")
 
 class WorksNode(Node):
     def __init__(self):
@@ -119,6 +139,23 @@ class WorkItemNode(Node):
     def __init__(self, name: str):
         super().__init__(name)
         self.work = Work(name, "")
+
+    def run(self):
+        logger.debug(f"Node {self.get_text()} is running")
+
+    def edit(self):
+        logger.debug(f"Node {self.get_text()} is edited")
+        tabs = self._get_tab_widget()
+        if tabs:
+            title = f"{self.get_text()} - edit"
+            for i in range(tabs.count()):
+                if tabs.tabText(i) == title:
+                    tabs.setCurrentIndex(i)
+                    return
+                
+            i = tabs.addTab(WorkEditor(self.work.code, tabs), title)
+            tabs.setCurrentIndex(i)
+
         
     
 
@@ -129,6 +166,19 @@ class DataFramesNode(Node):
 class GraphsNode(Node):
     def __init__(self):
         super().__init__("Graphs")
+
+class WorkEditor(QWidget):
+
+    def __init__(self, text: str, parent):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+
+        self.toolbar = QToolBar("WorkEditor Toolbar")
+        layout.addWidget(self.toolbar)
+
+        self.editor = WorkCodeEdit()
+        layout.addWidget(self.editor)
+
 
 
 class MainWindow(QMainWindow):
@@ -332,6 +382,10 @@ class MainWindow(QMainWindow):
     @Slot()
     def edit(self):
         logger.debug(f"Edit clicked")
+        node = self._get_selected_tree_item()
+        if node and isinstance(node, Node):
+            logger.debug(f"Selected item: {node.get_text()}")
+            node.edit()
 
     @Slot()
     def remove(self):
@@ -399,6 +453,7 @@ def main():
 
     app = QApplication(sys.argv) # Передаємо аргументи командного рядка
     
+    global win
     win = MainWindow() # Створюємо екземпляр головного вікна
     win.show() # Показуємо вікно
     ret = app.exec() # Запускаємо цикл подій
