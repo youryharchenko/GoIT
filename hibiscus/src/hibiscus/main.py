@@ -33,7 +33,7 @@ from PySide6.QtGui import (
 )
 
 from PySide6.QtCore import (
-    Slot, Qt # Для вирівнювання або інших констант Qt
+    Slot, Qt, Signal # Для вирівнювання або інших констант Qt
 )
 
 from hibiscus.project import Project, Work
@@ -133,12 +133,15 @@ class WorksNode(Node):
             self.addChild(child)
             self.setExpanded(True)
             child.setSelected(True)
-            project.add_work(Work(child.get_text(), ""))
+            if child.work:
+                project.add_work(child.work)
 
 class WorkItemNode(Node):
     def __init__(self, name: str):
         super().__init__(name)
-        self.work = Work(name, "")
+        self.work = project.get_work(name)
+        if not self.work:
+            self.work = Work(name, "")
 
     def run(self):
         logger.debug(f"Node {self.get_text()} is running")
@@ -149,14 +152,31 @@ class WorkItemNode(Node):
         if tabs:
             title = f"{self.get_text()} - edit"
             for i in range(tabs.count()):
-                if tabs.tabText(i) == title:
+                if tabs.tabText(i) == title or tabs.tabText(i)[1:] == title:
                     tabs.setCurrentIndex(i)
                     return
-                
-            i = tabs.addTab(WorkEditor(self.work.code, tabs), title)
+            
+            code = self.work.code if self.work else ''
+            editor = WorkEditor(code, tabs)
+            i = tabs.addTab(editor, title)
+            editor.set_index(i)
+
+            editor.title_changed.connect(self.title_changed)
+            editor.do_save.connect(self.do_save)
             tabs.setCurrentIndex(i)
 
+    @Slot()
+    def title_changed(self, pref: str, index: int):
+        tabs = self._get_tab_widget()
+        if tabs:
+            tabs.setTabText(index, f"{pref}{self.get_text()} - edit")
+
+    @Slot()
+    def do_save(self, text: str):
+        if self.work:
+            self.work.code = text
         
+
     
 
 class DataFramesNode(Node):
@@ -169,15 +189,57 @@ class GraphsNode(Node):
 
 class WorkEditor(QWidget):
 
+    title_changed = Signal(str, int)
+    do_save = Signal(str) 
+
     def __init__(self, text: str, parent):
         super().__init__(parent)
+        self.index = -1
         layout = QVBoxLayout(self)
 
         self.toolbar = QToolBar("WorkEditor Toolbar")
+
+        self.save_action = QAction(QIcon.fromTheme("document-save"), "Save", self) 
+        self.save_action.triggered.connect(self.save)
+        self.save_action.setEnabled(False)
+        self.save_action.setShortcut("Ctrl+s")
+        self.toolbar.addAction(self.save_action)
+        
+
         layout.addWidget(self.toolbar)
 
-        self.editor = WorkCodeEdit()
+        self.editor = WorkCodeEdit(text)
+        self.editor.dirty_changed.connect(self.dirty_changed)
+        self.editor.text_saved.connect(self.text_saved)
+        
         layout.addWidget(self.editor)
+
+    def set_index(self, index: int):
+        self.index = index
+
+    @Slot()
+    def save(self):
+        logger.debug(f"Save code")
+        self.do_save.emit(self.editor.toPlainText())
+        self.title_changed.emit("", self.index)
+
+    @Slot()
+    def dirty_changed(self, state: bool):
+        logger.debug(f"Dirty changed: state = {state}")
+        if state:
+            pref = "*"
+            self.save_action.setEnabled(True)
+        else:
+            pref = "" 
+            self.save_action.setEnabled(False)
+        self.title_changed.emit(pref, self.index)
+        #self.changed = state
+
+    @Slot()
+    def text_saved(self, text: str):
+        logger.debug(f"Text saved: state = {text}")    
+
+
 
 
 

@@ -7,6 +7,7 @@ import logging
 import os
 import tempfile
 import jedi
+
 from pyqode.core.share import Definition
 from pyflakes import messages
 
@@ -68,15 +69,20 @@ def goto_assignments(request_data):
     # encoding = request_data['encoding']
     encoding = 'utf-8'
     script = jedi.Script(code, path = path) # line, column, path, encoding)
-    try:
-        definitions = script.goto_assignments()
-    except jedi.NotFoundError:
-        pass
-    else:
-        ret_val = [(d.module_path, d.line - 1 if d.line else None,
+    definitions = script.goto(line=line, column=column)
+    ret_val = [(d.module_path, d.line - 1 if d.line else None,
                     d.column, d.full_name)
                    for d in definitions]
-        return ret_val
+    return ret_val
+    # try:
+    #     definitions = script.goto(line=line, column=column)
+    # except jedi.NotFoundError:
+    #     pass
+    # else:
+    #     ret_val = [(d.module_path, d.line - 1 if d.line else None,
+    #                 d.column, d.full_name)
+    #                for d in definitions]
+    #     return ret_val
 
 
 _old_definitions = {}

@@ -19,6 +19,13 @@ class Project:
         self.works.append(work)
         self.data["works"] = self.works
 
+    def get_work(self, name):
+        for work in self.works:
+            if work.name == name:
+                return work 
+            else:
+                return None
+
 class Work:
      
     def __init__(self, name: str, code: str) -> None:
