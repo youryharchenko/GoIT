@@ -20,11 +20,12 @@ class Project:
         self.data["works"] = self.works
 
     def get_work(self, name):
+        
         for work in self.works:
             if work.name == name:
+                #print(f"Get work OK: {work.name} == {name}")
                 return work 
-            else:
-                return None
+        return None
 
 class Work:
      

@@ -883,11 +883,11 @@ class CodeEdit(QtWidgets.QPlainTextEdit):
     def eventFilter(self, obj, event):
         if obj == self and event.type() == QtCore.QEvent.KeyPress:
             if event.key() == QtCore.Qt.Key_X and \
-                    int(event.modifiers()) == QtCore.Qt.ControlModifier:
+                    event.modifiers() == QtCore.Qt.ControlModifier:
                 self.cut()
                 return True
             if event.key() == QtCore.Qt.Key_C and \
-                    (event.modifiers()) == QtCore.Qt.ControlModifier:
+                    event.modifiers() == QtCore.Qt.ControlModifier:
                 self.copy()
                 return True
         return False

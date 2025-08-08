@@ -1,6 +1,7 @@
 from __future__ import annotations
 import logging
 import sys
+import io
 import pathlib
 import pickle
 
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QFileDialog,
     QVBoxLayout,
+    QListWidget,
     QTextEdit,
     #QStatusBar,
     QWidget,
@@ -111,7 +113,11 @@ class Node(QTreeWidgetItem):
         logger.warning(f"Node {self.get_text()} can not add")
 
     def edit(self):
-        logger.warning(f"Node {self.get_text()} can not edit")
+        logger.warning(f"Node {self.get_text()} can not be edited")
+
+    def rename(self):
+        logger.warning(f"Node {self.get_text()} can not be renamed")
+   
 
 class WorksNode(Node):
     def __init__(self):
@@ -136,11 +142,17 @@ class WorksNode(Node):
             if child.work:
                 project.add_work(child.work)
 
+    
+            
+
+
+
 class WorkItemNode(Node):
     def __init__(self, name: str):
         super().__init__(name)
         self.work = project.get_work(name)
         if not self.work:
+            logger.error(f"Init WorkItemNode: work '{name}' not found")
             self.work = Work(name, "")
 
     def run(self):
@@ -165,6 +177,25 @@ class WorkItemNode(Node):
             editor.do_save.connect(self.do_save)
             tabs.setCurrentIndex(i)
 
+    def rename(self):
+        logger.debug(f"Node {self.get_text()} rename")
+        old_name = self.get_text()
+        work = project.get_work(old_name)
+        name, ok = QInputDialog.getText(self.treeWidget(), "Rename Node", "New Node name:", text=self.get_text())
+        if work and ok and name:
+            logger.debug(f"New Name: {name}")
+            super().setText(0, name)
+            work.name = name
+            tabs = self._get_tab_widget()
+            if tabs:
+                old_title = f"{old_name} - edit"
+                for i in range(tabs.count()):
+                    if tabs.tabText(i) == old_title or tabs.tabText(i)[1:] == old_title:
+
+                        tabs.setTabText(i, tabs.tabText(i).replace(old_name, name, 1))
+                        return
+
+
     @Slot()
     def title_changed(self, pref: str, index: int):
         tabs = self._get_tab_widget()
@@ -173,6 +204,7 @@ class WorkItemNode(Node):
 
     @Slot()
     def do_save(self, text: str):
+        logger.debug(f"Do save: {self.work}, text: {text}")
         if self.work:
             self.work.code = text
         
@@ -194,25 +226,45 @@ class WorkEditor(QWidget):
 
     def __init__(self, text: str, parent):
         super().__init__(parent)
+
+        self.run_globals = {}
+        self.run_locals = {} 
+
         self.index = -1
+
         layout = QVBoxLayout(self)
 
         self.toolbar = QToolBar("WorkEditor Toolbar")
 
-        self.save_action = QAction(QIcon.fromTheme("document-save"), "Save", self) 
+        self.save_action = QAction(QIcon.fromTheme("document-save"), "Save (Ctrl+s)", self) 
         self.save_action.triggered.connect(self.save)
         self.save_action.setEnabled(False)
         self.save_action.setShortcut("Ctrl+s")
         self.toolbar.addAction(self.save_action)
-        
 
+        self.run_action = QAction(QIcon.fromTheme("media-playback-start"), "Run (Ctrl+r)", self) 
+        self.run_action.triggered.connect(self.run)
+        self.run_action.setEnabled(True)
+        self.run_action.setShortcut("Ctrl+r")
+        self.toolbar.addAction(self.run_action)
+        
         layout.addWidget(self.toolbar)
+
+        splitter = QSplitter(parent=self, orientation=Qt.Orientation.Vertical)
+
 
         self.editor = WorkCodeEdit(text)
         self.editor.dirty_changed.connect(self.dirty_changed)
-        self.editor.text_saved.connect(self.text_saved)
+        #self.editor.text_saved.connect(self.text_saved)
+
+        splitter.addWidget(self.editor)
+
+
+        self.output = QListWidget(parent=splitter)
+
+        splitter.addWidget(self.output)
         
-        layout.addWidget(self.editor)
+        layout.addWidget(splitter)
 
     def set_index(self, index: int):
         self.index = index
@@ -222,6 +274,34 @@ class WorkEditor(QWidget):
         logger.debug(f"Save code")
         self.do_save.emit(self.editor.toPlainText())
         self.title_changed.emit("", self.index)
+        self.editor.document().setModified(False)
+
+    @Slot()
+    def run(self):
+        logger.debug(f"Run code")
+
+        self.output.clear()
+
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+
+        redirected_output = io.StringIO()
+        
+        sys.stdout = redirected_output
+        sys.stderr = redirected_output
+
+        try:
+            exec(self.editor.toPlainText(), self.run_globals, self.run_locals)
+        except Exception as e:
+            self.output.addItem(f"Error: {e}")
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+            output_content = redirected_output.getvalue()
+            if output_content:
+                for item in output_content.strip().split("\n"):
+                    self.output.addItem(item)
+        
 
     @Slot()
     def dirty_changed(self, state: bool):
@@ -235,9 +315,10 @@ class WorkEditor(QWidget):
         self.title_changed.emit(pref, self.index)
         #self.changed = state
 
-    @Slot()
-    def text_saved(self, text: str):
-        logger.debug(f"Text saved: state = {text}")    
+    # @Slot()
+    # def text_saved(self, text: str):
+    #     logger.debug(f"Text saved: state = {text}")
+        
 
 
 
@@ -385,8 +466,14 @@ class MainWindow(QMainWindow):
                 project.set_name(name)
                 self.setWindowTitle(f"Hibiscus - {project.name}")
                 tree.setHeaderLabels([project.name])
+
+        def on_item_double_clicked(item: Node, _):
+            logger.debug(f"Tree item double clicked: {item.get_text()}")    
+            item.rename()
+
         
         tree.header().sectionDoubleClicked.connect(on_header_double_clicked)
+        tree.itemDoubleClicked.connect(on_item_double_clicked)
         
         return tree
     
