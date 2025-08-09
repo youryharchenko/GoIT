@@ -79,10 +79,11 @@ class ZoomMode(Mode):
         except AttributeError:
             # PyQt4/PySide
             delta = event.delta()
-        if (event.modifiers()) & QtCore.Qt.ControlModifier > 0:
-            if delta < self.prev_delta:
-                self.editor.zoom_out()
-                event.accept()
-            else:
-                self.editor.zoom_in()
-                event.accept()
+
+        # if (event.modifiers()) & QtCore.Qt.ControlModifier > 0:
+        #     if delta < self.prev_delta:
+        #         self.editor.zoom_out()
+        #         event.accept()
+        #     else:
+        #         self.editor.zoom_in()
+        #         event.accept()

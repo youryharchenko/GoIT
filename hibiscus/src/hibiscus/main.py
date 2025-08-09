@@ -4,6 +4,8 @@ import sys
 import io
 import pathlib
 import pickle
+import traceback
+import builtins
 
 from appdirs import user_data_dir
 
@@ -282,6 +284,8 @@ class WorkEditor(QWidget):
 
         self.output.clear()
 
+        self.run_globals["__builtins__"] = builtins
+
         old_stdout = sys.stdout
         old_stderr = sys.stderr
 
@@ -291,9 +295,14 @@ class WorkEditor(QWidget):
         sys.stderr = redirected_output
 
         try:
-            exec(self.editor.toPlainText(), self.run_globals, self.run_locals)
+            # print("Вміст self.run_globals перед exec():")
+            # for key, value in self.run_globals.items():
+            #     print(f"  {key}: {type(value)}")
+
+            exec(self.editor.toPlainText(), self.run_globals)
         except Exception as e:
-            self.output.addItem(f"Error: {e}")
+            #self.output.addItem(f"Error: {e.with_traceback()}")
+            traceback.print_exception(e)
         finally:
             sys.stdout = old_stdout
             sys.stderr = old_stderr
@@ -365,7 +374,7 @@ class MainWindow(QMainWindow):
             logger.warning(f"Load project error: {e}, create new")
             project = self._init_project(name)
 
-        logger.debug(f"Open Project data: {project.data}")
+        #logger.debug(f"Open Project data: {project.data}")
         self.setWindowTitle(f"Hibiscus - {project.name}")
         self._apply_project()
 
@@ -556,7 +565,7 @@ class MainWindow(QMainWindow):
             with open(config_path, "wb") as f:
                 pickle.dump(config, f)
 
-            logger.debug(f"Save Project data: {project.data}")
+            #logger.debug(f"Save Project data: {project.data}")
             with open(last_project, "wb") as f:
                 pickle.dump(project.data, f)
 
