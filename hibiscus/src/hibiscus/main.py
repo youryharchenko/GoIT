@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QVBoxLayout,
     QListWidget,
+    QMessageBox,
     QTextEdit,
     #QStatusBar,
     QWidget,
@@ -110,21 +111,29 @@ class Node(QTreeWidgetItem):
     
     def run(self):
         logger.warning(f"Node {self.get_text()} can not run")
+        QMessageBox.warning(self.treeWidget(), self.get_text(), 
+                    f"Node {self.get_text()} can not be ran")
 
     def add(self):
         logger.warning(f"Node {self.get_text()} can not add")
+        QMessageBox.warning(self.treeWidget(), self.get_text(), 
+                    f"Node {self.get_text()} can not be added")
 
     def edit(self):
         logger.warning(f"Node {self.get_text()} can not be edited")
+        QMessageBox.warning(self.treeWidget(), self.get_text(), 
+                    f"Node {self.get_text()} can not be edited")
 
     def rename(self):
         logger.warning(f"Node {self.get_text()} can not be renamed")
+        QMessageBox.warning(self.treeWidget(), self.get_text(), 
+                    f"Node {self.get_text()} can not be renamed")
    
 
 class WorksNode(Node):
     def __init__(self):
         super().__init__("Works")
-
+        
     def _makeWorkItemNode(self):
         text, ok = QInputDialog.getText(self.treeWidget(), "New Work", "Work name:")
         if ok and text:
@@ -159,6 +168,27 @@ class WorkItemNode(Node):
 
     def run(self):
         logger.debug(f"Node {self.get_text()} is running")
+        tabs = self._get_tab_widget()
+        if tabs:
+            title = f"{self.get_text()} - edit"
+            for i in range(tabs.count()):
+                if tabs.tabText(i) == title or tabs.tabText(i)[1:] == title:
+                    tabs.setCurrentIndex(i)
+                    editor = tabs.currentWidget()
+                    if isinstance(editor, WorkEditor):
+                        editor.run()
+                    return
+            
+            code = self.work.code if self.work else ''
+            editor = WorkEditor(code, tabs)
+            i = tabs.addTab(editor, title)
+            editor.set_index(i)
+            
+            editor.title_changed.connect(self.title_changed)
+            editor.do_save.connect(self.do_save)
+            tabs.setCurrentIndex(i)
+
+            editor.run()
 
     def edit(self):
         logger.debug(f"Node {self.get_text()} is edited")
@@ -406,6 +436,8 @@ class MainWindow(QMainWindow):
 
         tree.addTopLevelItem(DataFramesNode())
         tree.addTopLevelItem(GraphsNode())
+
+        tree.expandAll()
         
       
 
