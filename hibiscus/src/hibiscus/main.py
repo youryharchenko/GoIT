@@ -239,6 +239,13 @@ class WorkItemNode(Node):
         logger.debug(f"Do save: {self.work}, text: {text}")
         if self.work:
             self.work.code = text
+
+        try:
+            with open(last_project, "wb") as f:
+                pickle.dump(project.data, f)
+        except Exception as e:
+            logger.error(f"Save project error: {e}")
+            QMessageBox.critical(self.treeWidget(), "Save project", f"{e}")
         
 
     
