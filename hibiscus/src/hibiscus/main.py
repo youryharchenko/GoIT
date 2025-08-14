@@ -41,8 +41,11 @@ from PySide6.QtCore import (
     Slot, Qt, Signal # Для вирівнювання або інших констант Qt
 )
 
-from hibiscus.project import Project, Work
-from hibiscus.codeedit import WorkCodeEdit
+from hibiscus.project import Project
+from hibiscus.node import Node
+from hibiscus.work import WorksNode, WorkItemNode
+from hibiscus.data import DataFramesNode
+from hibiscus.graph import GraphsNode
 
 app_name = "Hibiscus"
 app_author = "YouryHarchenko"
@@ -83,340 +86,54 @@ elif not data_path.is_dir():
     sys.exit(1)
 
 logger.debug(f"Projects dir: {project_path}")
-last_project = config.get("last-project", "")
-project = Project({"name": pathlib.Path(last_project).name})
-
 logger.debug(f"config: {config}")
-
-class Node(QTreeWidgetItem):
-    def __init__(self, text: str):
-        super().__init__([text])
-
-    def _get_tab_widget(self):
-        
-        central = win.centralWidget()
-        if not isinstance(central, QSplitter):
-            logger.error(f"Central must be QSplitter, it is {type(central) }")
-            return None
-        
-        tabs = central.widget(1)
-        if not isinstance(tabs, QTabWidget):
-            logger.error(f"Left must be QTabWidget, it is {type(tabs) }")
-            return None
-        
-        return tabs
-
-    def get_text(self) -> str:
-        return(super().text(0))
-    
-    def run(self):
-        logger.warning(f"Node {self.get_text()} can not run")
-        QMessageBox.warning(self.treeWidget(), self.get_text(), 
-                    f"Node {self.get_text()} can not be ran")
-
-    def add(self):
-        logger.warning(f"Node {self.get_text()} can not add")
-        QMessageBox.warning(self.treeWidget(), self.get_text(), 
-                    f"Node {self.get_text()} can not be added")
-
-    def edit(self):
-        logger.warning(f"Node {self.get_text()} can not be edited")
-        QMessageBox.warning(self.treeWidget(), self.get_text(), 
-                    f"Node {self.get_text()} can not be edited")
-
-    def rename(self):
-        logger.warning(f"Node {self.get_text()} can not be renamed")
-        QMessageBox.warning(self.treeWidget(), self.get_text(), 
-                    f"Node {self.get_text()} can not be renamed")
-   
-
-class WorksNode(Node):
-    def __init__(self):
-        super().__init__("Works")
-        
-    def _makeWorkItemNode(self):
-        text, ok = QInputDialog.getText(self.treeWidget(), "New Work", "Work name:")
-        if ok and text:
-            logger.debug(f"Work: {text}")
-            return WorkItemNode(text)
-        else:
-            return None
-    
-    def add(self):
-        logger.debug(f"Node {self.get_text()} add")
-        child = self._makeWorkItemNode()
-        if child:
-            self.treeWidget().clearSelection()
-            self.addChild(child)
-            self.setExpanded(True)
-            child.setSelected(True)
-            if child.work:
-                project.add_work(child.work)
-
-    
-            
-
-
-
-class WorkItemNode(Node):
-    def __init__(self, name: str):
-        super().__init__(name)
-        self.work = project.get_work(name)
-        if not self.work:
-            logger.error(f"Init WorkItemNode: work '{name}' not found")
-            self.work = Work(name, "")
-
-    def run(self):
-        logger.debug(f"Node {self.get_text()} is running")
-        tabs = self._get_tab_widget()
-        if tabs:
-            title = f"{self.get_text()} - edit"
-            for i in range(tabs.count()):
-                if tabs.tabText(i) == title or tabs.tabText(i)[1:] == title:
-                    tabs.setCurrentIndex(i)
-                    editor = tabs.currentWidget()
-                    if isinstance(editor, WorkEditor):
-                        editor.run()
-                    return
-            
-            code = self.work.code if self.work else ''
-            editor = WorkEditor(code, tabs)
-            i = tabs.addTab(editor, title)
-            editor.set_index(i)
-            
-            editor.title_changed.connect(self.title_changed)
-            editor.do_save.connect(self.do_save)
-            tabs.setCurrentIndex(i)
-
-            editor.run()
-
-    def edit(self):
-        logger.debug(f"Node {self.get_text()} is edited")
-        tabs = self._get_tab_widget()
-        if tabs:
-            title = f"{self.get_text()} - edit"
-            for i in range(tabs.count()):
-                if tabs.tabText(i) == title or tabs.tabText(i)[1:] == title:
-                    tabs.setCurrentIndex(i)
-                    return
-            
-            code = self.work.code if self.work else ''
-            editor = WorkEditor(code, tabs)
-            i = tabs.addTab(editor, title)
-            editor.set_index(i)
-
-            editor.title_changed.connect(self.title_changed)
-            editor.do_save.connect(self.do_save)
-            tabs.setCurrentIndex(i)
-
-    def rename(self):
-        logger.debug(f"Node {self.get_text()} rename")
-        old_name = self.get_text()
-        work = project.get_work(old_name)
-        name, ok = QInputDialog.getText(self.treeWidget(), "Rename Node", "New Node name:", text=self.get_text())
-        if work and ok and name:
-            logger.debug(f"New Name: {name}")
-            super().setText(0, name)
-            work.name = name
-            tabs = self._get_tab_widget()
-            if tabs:
-                old_title = f"{old_name} - edit"
-                for i in range(tabs.count()):
-                    if tabs.tabText(i) == old_title or tabs.tabText(i)[1:] == old_title:
-
-                        tabs.setTabText(i, tabs.tabText(i).replace(old_name, name, 1))
-                        return
-
-
-    @Slot()
-    def title_changed(self, pref: str, index: int):
-        tabs = self._get_tab_widget()
-        if tabs:
-            tabs.setTabText(index, f"{pref}{self.get_text()} - edit")
-
-    @Slot()
-    def do_save(self, text: str):
-        logger.debug(f"Do save: {self.work}, text: {text}")
-        if self.work:
-            self.work.code = text
-
-        try:
-            with open(last_project, "wb") as f:
-                pickle.dump(project.data, f)
-        except Exception as e:
-            logger.error(f"Save project error: {e}")
-            QMessageBox.critical(self.treeWidget(), "Save project", f"{e}")
-        
-
-    
-
-class DataFramesNode(Node):
-    def __init__(self):
-        super().__init__("DataFrames")
-
-class GraphsNode(Node):
-    def __init__(self):
-        super().__init__("Graphs")
-
-class WorkEditor(QWidget):
-
-    title_changed = Signal(str, int)
-    do_save = Signal(str) 
-
-    def __init__(self, text: str, parent):
-        super().__init__(parent)
-
-        self.run_globals = {}
-        self.run_locals = {} 
-
-        self.index = -1
-
-        layout = QVBoxLayout(self)
-
-        self.toolbar = QToolBar("WorkEditor Toolbar")
-
-        self.save_action = QAction(QIcon.fromTheme("document-save"), "Save (Ctrl+s)", self) 
-        self.save_action.triggered.connect(self.save)
-        self.save_action.setEnabled(False)
-        self.save_action.setShortcut("Ctrl+s")
-        self.toolbar.addAction(self.save_action)
-
-        self.run_action = QAction(QIcon.fromTheme("media-playback-start"), "Run (Ctrl+r)", self) 
-        self.run_action.triggered.connect(self.run)
-        self.run_action.setEnabled(True)
-        self.run_action.setShortcut("Ctrl+r")
-        self.toolbar.addAction(self.run_action)
-        
-        layout.addWidget(self.toolbar)
-
-        splitter = QSplitter(parent=self, orientation=Qt.Orientation.Vertical)
-
-
-        self.editor = WorkCodeEdit(text)
-        self.editor.dirty_changed.connect(self.dirty_changed)
-        #self.editor.text_saved.connect(self.text_saved)
-
-        splitter.addWidget(self.editor)
-
-
-        self.output = QListWidget(parent=splitter)
-
-        splitter.addWidget(self.output)
-        
-        layout.addWidget(splitter)
-
-    def set_index(self, index: int):
-        self.index = index
-
-    @Slot()
-    def save(self):
-        logger.debug(f"Save code")
-        self.do_save.emit(self.editor.toPlainText())
-        self.title_changed.emit("", self.index)
-        self.editor.document().setModified(False)
-
-    @Slot()
-    def run(self):
-        logger.debug(f"Run code")
-
-        self.output.clear()
-
-        self.run_globals["__builtins__"] = builtins
-
-        old_stdout = sys.stdout
-        old_stderr = sys.stderr
-
-        redirected_output = io.StringIO()
-        
-        sys.stdout = redirected_output
-        sys.stderr = redirected_output
-
-        try:
-            # print("Вміст self.run_globals перед exec():")
-            # for key, value in self.run_globals.items():
-            #     print(f"  {key}: {type(value)}")
-
-            exec(self.editor.toPlainText(), self.run_globals)
-        except Exception as e:
-            #self.output.addItem(f"Error: {e.with_traceback()}")
-            traceback.print_exception(e)
-        finally:
-            sys.stdout = old_stdout
-            sys.stderr = old_stderr
-            output_content = redirected_output.getvalue()
-            if output_content:
-                for item in output_content.strip().split("\n"):
-                    self.output.addItem(item)
-        
-
-    @Slot()
-    def dirty_changed(self, state: bool):
-        logger.debug(f"Dirty changed: state = {state}")
-        if state:
-            pref = "*"
-            self.save_action.setEnabled(True)
-        else:
-            pref = "" 
-            self.save_action.setEnabled(False)
-        self.title_changed.emit(pref, self.index)
-        #self.changed = state
-
-    # @Slot()
-    # def text_saved(self, text: str):
-    #     logger.debug(f"Text saved: state = {text}")
-        
-
-
-
-
 
 class MainWindow(QMainWindow):
 
-    def __init__(self):
+    def __init__(self, name: str):
         logger.debug("MainWindow.__init__ started")
         super().__init__()
-
-        self.setWindowTitle(f"Hibiscus - {last_project.name}")
+       
         
-        #self.setContentsMargins(40, 40, 40, 40)
-
+        
         self.addToolBar(self._makeToolBar())
         self.setCentralWidget(self._makeCentral())
-
-        apply_config(self)
-
-        self.open_project(project.name)
-        self._apply_project()
+        
+        if name:
+           self.open_project(name)
+        else:
+           self.new_project("Untitled")
+        
+        self.apply_config()
 
         logger.debug("MainWindow.__init__ finshed")
 
     def new_project(self, name: str):
-        global last_project
-        global project
+        
         last_project = project_path.joinpath(name)
         config["last-project"] = last_project
-        project = self._init_project(name)
-        self.setWindowTitle(f"Hibiscus - {project.name}")
+        self.project = self._init_project(last_project)
+        self.setWindowTitle(f"Hibiscus - {self.project.name}")
         self._apply_project()
-
+        
     def open_project(self, name):
-        global last_project
-        global project
+        
         last_project = project_path.joinpath(name)
         config["last-project"] = last_project
         try:
             with open(last_project, "rb") as f:
-                project = Project(pickle.load(f))
+                self.project = Project(last_project, pickle.load(f))
         except Exception as e:
             logger.warning(f"Load project error: {e}, create new")
-            project = self._init_project(name)
+            self.project = self._init_project(name)
 
         #logger.debug(f"Open Project data: {project.data}")
-        self.setWindowTitle(f"Hibiscus - {project.name}")
+        self.setWindowTitle(f"Hibiscus - {self.project.name}")
         self._apply_project()
+        
 
-    def _init_project(self, name):
-        return Project({"name": name, "works": []})
+    def _init_project(self, last_project: pathlib.Path):
+        return Project(last_project, {"name": last_project.name, "works": []})
     
     def _apply_project(self):
         central = self.centralWidget()
@@ -434,15 +151,15 @@ class MainWindow(QMainWindow):
                 
         tree.clear()
         
-        tree.setHeaderLabels([project.name])
+        tree.setHeaderLabels([self.project.name])
         
-        works_node = WorksNode()
-        for work in project.works:
-            works_node.addChild(WorkItemNode(work.name))
+        works_node = WorksNode(self, self.project)
+        for work in self.project.works:
+            works_node.addChild(WorkItemNode(work.name, self, self.project))
         tree.addTopLevelItem(works_node)
 
-        tree.addTopLevelItem(DataFramesNode())
-        tree.addTopLevelItem(GraphsNode())
+        tree.addTopLevelItem(DataFramesNode(self, self.project))
+        tree.addTopLevelItem(GraphsNode(self, self.project))
 
         tree.expandAll()
         
@@ -505,15 +222,15 @@ class MainWindow(QMainWindow):
 
         def on_header_double_clicked():
             logger.debug(f"Tree header double clicked")
-            name, ok = QInputDialog.getText(self, "Rename Project", "New Project name:", text=project.name)
+            name, ok = QInputDialog.getText(self, "Rename Project", "New Project name:", text=self.project.name)
             if ok and name:
                 logger.debug(f"Name: {name}")
-                global last_project
+                #global last_project
                 last_project = project_path.joinpath(name)
                 config["last-project"] = last_project
-                project.set_name(name)
-                self.setWindowTitle(f"Hibiscus - {project.name}")
-                tree.setHeaderLabels([project.name])
+                self.project.set_name(name)
+                self.setWindowTitle(f"Hibiscus - {self.project.name}")
+                tree.setHeaderLabels([self.project.name])
 
         def on_item_double_clicked(item: Node, _):
             logger.debug(f"Tree item double clicked: {item.get_text()}")    
@@ -599,14 +316,14 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         try:
-            set_config(self)
+            self.set_config()
             logger.debug(f"MainWindow - closeEvent, config: {config}")
             with open(config_path, "wb") as f:
                 pickle.dump(config, f)
 
             #logger.debug(f"Save Project data: {project.data}")
-            with open(last_project, "wb") as f:
-                pickle.dump(project.data, f)
+            with open(self.project.path, "wb") as f:
+                pickle.dump(self.project.data, f)
 
         except Exception as e:
             logger.error(f"Save error: {e}")
@@ -625,23 +342,24 @@ class MainWindow(QMainWindow):
         return super().moveEvent(event)
     
 
-def set_config(win: MainWindow):
-    central = win.centralWidget() 
-    sizes = central.sizes() if isinstance(central, QSplitter) else [win.width() // 3, win.width() - (win.width() // 3)]
-    config["tree-size"] = sizes[0]
-    config["tabs-size"] = sizes[1]
+    def set_config(self):
+        central = self.centralWidget() 
+        sizes = central.sizes() if isinstance(central, QSplitter) else [self.width() // 3, self.width() - (self.width() // 3)]
+        config["tree-size"] = sizes[0]
+        config["tabs-size"] = sizes[1]
 
-def apply_config(win: MainWindow):
-    win.setGeometry(
-        int(config.get("main-x", 100)), 
-        int(config.get("main-y", 100)), 
-        int(config.get("main-width", 1024)),
-        int(config.get("main-height", 800)))
-    
-    central = win.centralWidget() 
-    if isinstance(central, QSplitter):
-        central.setSizes([config.get("tree-size", win.width() // 3), config.get("tabs-size", (win.width() - win.width() // 3))])
-    
+    def apply_config(self):
+        self.setGeometry(
+            int(config.get("main-x", 100)), 
+            int(config.get("main-y", 100)), 
+            int(config.get("main-width", 1024)),
+            int(config.get("main-height", 800)))
+        
+        central = self.centralWidget() 
+        if isinstance(central, QSplitter):
+            central.setSizes([config.get("tree-size", 
+                                        self.width() // 3), config.get("tabs-size", (self.width() - self.width() // 3))])
+        
 
         
 
@@ -649,9 +367,10 @@ def main():
     logger.info(f"Start. argv: {sys.argv}")
 
     app = QApplication(sys.argv) # Передаємо аргументи командного рядка
+
+    last_project = config.get("last-project", "")
     
-    global win
-    win = MainWindow() # Створюємо екземпляр головного вікна
+    win = MainWindow(pathlib.Path(last_project).name) # Створюємо екземпляр головного вікна
     win.show() # Показуємо вікно
     ret = app.exec() # Запускаємо цикл подій
 

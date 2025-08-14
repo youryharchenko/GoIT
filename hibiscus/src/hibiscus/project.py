@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import pathlib
+
 class Project:
 
-    def __init__(self, data: dict) -> None:
+    def __init__(self, path: pathlib.Path, data: dict) -> None:
+        self.path = path
         self.data = data
         self.name = data.get("name", "noname")
         self.works = data.get("works", [])
