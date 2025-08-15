@@ -1,11 +1,9 @@
 from __future__ import annotations
 import logging
 import sys
-import io
 import pathlib
 import pickle
-import traceback
-import builtins
+
 
 from appdirs import user_data_dir
 
@@ -44,7 +42,7 @@ from PySide6.QtCore import (
 from hibiscus.project import Project
 from hibiscus.node import Node
 from hibiscus.work import WorksNode, WorkItemNode
-from hibiscus.data import DataFramesNode
+from hibiscus.data import DataFramesNode, DataItemNode
 from hibiscus.graph import GraphsNode
 
 app_name = "Hibiscus"
@@ -158,7 +156,12 @@ class MainWindow(QMainWindow):
             works_node.addChild(WorkItemNode(work.name, self, self.project))
         tree.addTopLevelItem(works_node)
 
-        tree.addTopLevelItem(DataFramesNode(self, self.project))
+        data_frame_node = DataFramesNode(self, self.project)
+        for data in self.project.data_frames:
+            data_frame_node.addChild(DataItemNode(data.name, self, self.project))
+        tree.addTopLevelItem(data_frame_node)
+
+
         tree.addTopLevelItem(GraphsNode(self, self.project))
 
         tree.expandAll()
