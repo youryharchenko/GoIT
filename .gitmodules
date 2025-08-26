@@ -19,3 +19,6 @@
 [submodule "lotus"]
 	path = lotus
 	url = https://github.com/i-form-neo/lotus.git
+[submodule "goit-algo-hw-02"]
+	path = goit-algo-hw-02
+	url = https://github.com/youryharchenko/goit-algo-hw-02.git
