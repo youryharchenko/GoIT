@@ -22,3 +22,6 @@
 [submodule "goit-algo-hw-02"]
 	path = goit-algo-hw-02
 	url = https://github.com/youryharchenko/goit-algo-hw-02.git
+[submodule "goit-algo-hw-04"]
+	path = goit-algo-hw-04
+	url = https://github.com/youryharchenko/goit-algo-hw-04.git
